@@ -4,8 +4,423 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>TEL Demand vs Delivery Tracker</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
-<body>
-  <h2>TEL Demand vs Delivery System - Setup Ready</h2>
+<body class="bg-slate-100 min-h-screen font-sans text-slate-800">
+
+  <!-- Top Navbar -->
+  <nav class="bg-slate-900 text-white px-4 py-3 flex justify-between items-center shadow">
+    <div>
+      <h1 class="font-bold text-lg tracking-wide">TEL Demand vs Delivery</h1>
+      <p id="userBadge" class="text-xs text-slate-400 hidden"></p>
+    </div>
+    <button id="logoutBtn" onclick="logout()" class="hidden bg-red-600 hover:bg-red-700 text-xs font-semibold px-3 py-1.5 rounded">
+      Logout
+    </button>
+  </nav>
+
+  <div class="max-w-6xl mx-auto p-4">
+
+    <!-- Toast Notification Banner -->
+    <div id="toast" class="hidden fixed top-16 right-4 z-50 bg-emerald-600 text-white px-5 py-3 rounded-lg shadow-xl font-semibold transition-all"></div>
+
+    <!-- 1. LOGIN SCREEN -->
+    <div id="loginSection" class="max-w-md mx-auto bg-white p-6 rounded-xl shadow-md mt-10">
+      <h2 class="text-xl font-bold mb-4 text-center">Floor Login</h2>
+      <div class="space-y-4">
+        <div>
+          <label class="block text-sm font-medium mb-1">User ID</label>
+          <input id="loginId" type="text" placeholder="e.g. incharge or del1" class="w-full border rounded-lg px-3 py-2 focus:outline-blue-600">
+        </div>
+        <div>
+          <label class="block text-sm font-medium mb-1">PIN</label>
+          <input id="loginPin" type="password" placeholder="••••" class="w-full border rounded-lg px-3 py-2 focus:outline-blue-600">
+        </div>
+        <button onclick="login()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-lg">
+          Login
+        </button>
+        <p class="text-xs text-slate-500 text-center mt-2">
+          Incharge ID: <b>incharge</b> (PIN: 1234) | Delivery Men: <b>del1</b> to <b>del10</b> (PIN: 1111)
+        </p>
+      </div>
+    </div>
+
+    <!-- 2. MAIN APP DASHBOARD -->
+    <div id="appSection" class="hidden space-y-6">
+
+      <!-- INCHARGE ONLY: Upload Excel or Manual Demand -->
+      <div id="inchargePanel" class="hidden bg-white p-5 rounded-xl shadow-md border-l-4 border-blue-600 space-y-4">
+        <div class="flex flex-wrap justify-between items-center gap-4">
+          <div>
+            <h2 class="text-lg font-bold">Incharge Demand Upload</h2>
+            <p class="text-xs text-slate-500">Upload Excel sheet (JOB ORDER, ITEM CODE, ITEM NAME, COLOR, DEMAND QTY) or add manually</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <input type="file" id="excelFile" accept=".xlsx, .xls, .csv" class="text-sm border rounded p-1">
+            <button onclick="uploadExcel()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold px-4 py-2 rounded-lg">
+              Upload Excel
+            </button>
+          </div>
+        </div>
+
+        <!-- Manual Single Order Entry -->
+        <div class="grid grid-cols-2 md:grid-cols-6 gap-2 pt-2 border-t">
+          <input id="mJob" placeholder="Job Order *" class="border rounded px-2 py-1.5 text-sm">
+          <input id="mCode" placeholder="Item Code *" class="border rounded px-2 py-1.5 text-sm">
+          <input id="mName" placeholder="Item Name *" class="border rounded px-2 py-1.5 text-sm md:col-span-2">
+          <input id="mColor" placeholder="Color" class="border rounded px-2 py-1.5 text-sm">
+          <div class="flex gap-1">
+            <input id="mQty" type="number" placeholder="Demand *" class="border rounded px-2 py-1.5 text-sm w-full">
+            <button onclick="addManualOrder()" class="bg-blue-600 text-white px-3 rounded text-sm font-bold">+</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- DELIVERY ENTRY FORM (For Delivery Men & Incharge) -->
+      <div class="bg-white p-5 rounded-xl shadow-md border-l-4 border-emerald-600">
+        <h2 class="text-lg font-bold mb-3">Submit Shift Delivery</h2>
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+          <div class="md:col-span-2">
+            <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Select Active Order Item</label>
+            <select id="orderSelect" class="w-full border rounded-lg px-3 py-2 text-sm bg-slate-50"></select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Shift</label>
+            <select id="shiftSelect" class="w-full border rounded-lg px-3 py-2 text-sm bg-slate-50">
+              <option value="Shift A">Shift A</option>
+              <option value="Shift B">Shift B</option>
+              <option value="Shift C">Shift C</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Delivery Qty (Pcs)</label>
+            <div class="flex gap-2">
+              <input id="delivQty" type="number" min="1" placeholder="e.g. 500" class="w-full border rounded-lg px-3 py-2 text-sm">
+              <button onclick="submitDelivery()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2 rounded-lg text-sm whitespace-nowrap">
+                Submit
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- LIVE DEMAND VS DELIVERY TABLE -->
+      <div class="bg-white p-5 rounded-xl shadow-md">
+        <div class="flex justify-between items-center mb-3">
+          <h2 class="text-lg font-bold">Live Order Fulfillment Status</h2>
+          <span class="text-xs bg-blue-100 text-blue-800 px-2.5 py-1 rounded-full font-semibold">Real-Time Sync Active</span>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse text-sm">
+            <thead>
+              <tr class="bg-slate-800 text-white">
+                <th class="p-2.5">JOB ORDER</th>
+                <th class="p-2.5">ITEM CODE</th>
+                <th class="p-2.5">ITEM NAME</th>
+                <th class="p-2.5">COLOR</th>
+                <th class="p-2.5 text-right">DEMAND</th>
+                <th class="p-2.5 text-right">DELIVERED</th>
+                <th class="p-2.5 text-right">REMAINING</th>
+                <th class="p-2.5 text-center">STATUS</th>
+              </tr>
+            </thead>
+            <tbody id="ordersTableBody" class="divide-y"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- SHIFT DELIVERY LOGS (With Auth-Checked Edit Option) -->
+      <div class="bg-white p-5 rounded-xl shadow-md">
+        <h2 class="text-lg font-bold mb-1">Delivery Entry Logs (Edit Scope)</h2>
+        <p class="text-xs text-slate-500 mb-3">Delivery men can edit their own entries; Incharge can edit or delete any entry.</p>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse text-sm">
+            <thead>
+              <tr class="bg-slate-200 text-slate-700">
+                <th class="p-2">Time</th>
+                <th class="p-2">Job Order & Item</th>
+                <th class="p-2">Delivery Man</th>
+                <th class="p-2">Shift</th>
+                <th class="p-2 text-right">Qty (Pcs)</th>
+                <th class="p-2 text-center">Action</th>
+              </tr>
+            </thead>
+            <tbody id="logsTableBody" class="divide-y"></tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    const SUPABASE_URL = 'https://jghjhwnjqcaruuipqeqt.supabase.co';
+    const SUPABASE_KEY = 'sb_publishable_iapEtjenP-WNeQJjXvI3jg_YaBWq81U';
+    const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    let currentUser = null;
+    let ordersData = [];
+    let logsData = [];
+
+    function showToast(msg, isError = false) {
+      const t = document.getElementById('toast');
+      t.innerText = msg;
+      t.className = `fixed top-16 right-4 z-50 px-5 py-3 rounded-lg shadow-xl font-semibold text-white ${isError ? 'bg-red-600' : 'bg-emerald-600'}`;
+      t.classList.remove('hidden');
+      setTimeout(() => t.classList.add('hidden'), 4000);
+    }
+
+    async function login() {
+      const uid = document.getElementById('loginId').value.trim();
+      const pin = document.getElementById('loginPin').value.trim();
+      if (!uid || !pin) return showToast('Enter both User ID and PIN', true);
+
+      const { data, error } = await supabaseClient
+        .from('app_users')
+        .select('*')
+        .eq('user_id', uid)
+        .eq('pin', pin)
+        .single();
+
+      if (error || !data) return showToast('Invalid User ID or PIN! (Did you run the SQL setup in Supabase?)', true);
+
+      currentUser = data;
+      document.getElementById('loginSection').classList.add('hidden');
+      document.getElementById('appSection').classList.remove('hidden');
+      document.getElementById('logoutBtn').classList.remove('hidden');
+      const badge = document.getElementById('userBadge');
+      badge.innerText = `Logged in: ${currentUser.name} (${currentUser.role.toUpperCase()})`;
+      badge.classList.remove('hidden');
+
+      if (currentUser.role === 'incharge') {
+        document.getElementById('inchargePanel').classList.remove('hidden');
+      } else {
+        document.getElementById('inchargePanel').classList.add('hidden');
+      }
+
+      await loadAllData();
+      subscribeRealtime();
+    }
+
+    function logout() {
+      currentUser = null;
+      document.getElementById('loginSection').classList.remove('hidden');
+      document.getElementById('appSection').classList.add('hidden');
+      document.getElementById('logoutBtn').classList.add('hidden');
+      document.getElementById('userBadge').classList.add('hidden');
+    }
+
+    async function loadAllData() {
+      const { data: orders } = await supabaseClient.from('job_orders').select('*').order('id', { ascending: true });
+      const { data: logs } = await supabaseClient.from('delivery_logs').select('*').order('updated_at', { ascending: false });
+      ordersData = orders || [];
+      logsData = logs || [];
+      renderUI();
+    }
+
+    function renderUI() {
+      const sumByOrder = {};
+      logsData.forEach(l => {
+        sumByOrder[l.order_id] = (sumByOrder[l.order_id] || 0) + Number(l.delivered_qty);
+      });
+
+      const tbody = document.getElementById('ordersTableBody');
+      const select = document.getElementById('orderSelect');
+      const prevSelected = select.value;
+      tbody.innerHTML = '';
+      select.innerHTML = '<option value="">-- Choose Job Order & Item --</option>';
+
+      ordersData.forEach(o => {
+        const delivered = sumByOrder[o.id] || 0;
+        const remaining = Math.max(0, o.demand_qty - delivered);
+        const isDone = delivered >= o.demand_qty;
+
+        if (!isDone) {
+          const opt = document.createElement('option');
+          opt.value = o.id;
+          opt.textContent = `[${o.job_order}] ${o.item_code} - ${o.item_name} (Rem: ${remaining})`;
+          select.appendChild(opt);
+        }
+
+        const tr = document.createElement('tr');
+        tr.className = isDone ? 'bg-emerald-50 text-slate-500' : 'hover:bg-slate-50';
+        tr.innerHTML = `
+          <td class="p-2.5 font-semibold">${o.job_order}</td>
+          <td class="p-2.5">${o.item_code}</td>
+          <td class="p-2.5">${o.item_name}</td>
+          <td class="p-2.5 text-xs">${o.color || '-'}</td>
+          <td class="p-2.5 text-right font-bold bg-cyan-50">${o.demand_qty.toLocaleString()}</td>
+          <td class="p-2.5 text-right font-bold text-blue-700">${delivered.toLocaleString()}</td>
+          <td class="p-2.5 text-right font-bold ${remaining === 0 ? 'text-emerald-600' : 'text-amber-600'}">${remaining.toLocaleString()}</td>
+          <td class="p-2.5 text-center">
+            <span class="px-2 py-1 rounded text-xs font-bold ${isDone ? 'bg-emerald-600 text-white' : 'bg-amber-100 text-amber-800'}">
+              ${isDone ? 'DEMAND DONE' : 'ACTIVE'}
+            </span>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      if (prevSelected) select.value = prevSelected;
+
+      const logsBody = document.getElementById('logsTableBody');
+      logsBody.innerHTML = '';
+      const orderMap = {};
+      ordersData.forEach(o => orderMap[o.id] = o);
+
+      logsData.forEach(l => {
+        const ord = orderMap[l.order_id] || {};
+        const canEdit = currentUser && (currentUser.role === 'incharge' || currentUser.user_id === l.user_id);
+        const timeStr = new Date(l.updated_at).toLocaleString();
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td class="p-2 text-xs text-slate-500">${timeStr}</td>
+          <td class="p-2 font-medium">${ord.job_order || ''} - ${ord.item_name || ''}</td>
+          <td class="p-2">${l.user_name} <span class="text-xs text-slate-400">(${l.user_id})</span></td>
+          <td class="p-2">${l.shift}</td>
+          <td class="p-2 text-right font-bold">${l.delivered_qty}</td>
+          <td class="p-2 text-center">
+            ${canEdit ? `<button onclick="editLog(${l.id}, ${l.order_id}, ${l.delivered_qty})" class="text-xs bg-amber-500 hover:bg-amber-600 text-white px-2.5 py-1 rounded font-semibold">Edit</button>` : '<span class="text-xs text-slate-400">Locked</span>'}
+          </td>
+        `;
+        logsBody.appendChild(tr);
+      });
+    }
+
+    async function submitDelivery() {
+      const orderId = Number(document.getElementById('orderSelect').value);
+      const shift = document.getElementById('shiftSelect').value;
+      const qty = Number(document.getElementById('delivQty').value);
+
+      if (!orderId) return showToast('Please select an active item!', true);
+      if (!qty || qty <= 0) return showToast('Enter a valid quantity!', true);
+
+      const order = ordersData.find(o => o.id === orderId);
+      const deliveredSoFar = logsData.filter(l => l.order_id === orderId).reduce((s, l) => s + Number(l.delivered_qty), 0);
+      const remaining = order.demand_qty - deliveredSoFar;
+
+      if (qty > remaining) {
+        return showToast(`Demand Exceeded! Only ${remaining} pcs remaining for ${order.item_name}.`, true);
+      }
+
+      const { error } = await supabaseClient.from('delivery_logs').insert([{
+        order_id: orderId,
+        user_id: currentUser.user_id,
+        user_name: currentUser.name,
+        shift: shift,
+        delivered_qty: qty
+      }]);
+
+      if (error) return showToast(error.message, true);
+
+      document.getElementById('delivQty').value = '';
+      if (deliveredSoFar + qty === order.demand_qty) {
+        await supabaseClient.from('job_orders').update({ status: 'Completed' }).eq('id', orderId);
+        showToast(`DEMAND DONE for ${order.item_name} (${order.demand_qty} pcs)!`);
+      } else {
+        showToast(`Submitted ${qty} pcs! Remaining: ${remaining - qty} pcs.`);
+      }
+      await loadAllData();
+    }
+
+    async function editLog(logId, orderId, oldQty) {
+      const input = prompt(`Edit Delivered Quantity (Old: ${oldQty} pcs). Enter 0 to delete this entry:`, oldQty);
+      if (input === null) return;
+      const newQty = Number(input);
+      if (isNaN(newQty) || newQty < 0) return showToast('Invalid number!', true);
+
+      const order = ordersData.find(o => o.id === orderId);
+      const otherDelivered = logsData
+        .filter(l => l.order_id === orderId && l.id !== logId)
+        .reduce((s, l) => s + Number(l.delivered_qty), 0);
+
+      if (otherDelivered + newQty > order.demand_qty) {
+        return showToast(`Cannot exceed demand! Max allowed for this entry is ${order.demand_qty - otherDelivered} pcs.`, true);
+      }
+
+      if (newQty === 0) {
+        await supabaseClient.from('delivery_logs').delete().eq('id', logId);
+        showToast('Entry deleted.');
+      } else {
+        await supabaseClient.from('delivery_logs').update({
+          delivered_qty: newQty,
+          updated_at: new Date().toISOString()
+        }).eq('id', logId);
+        showToast('Entry updated successfully!');
+      }
+      await loadAllData();
+    }
+
+    async function addManualOrder() {
+      const job_order = document.getElementById('mJob').value.trim();
+      const item_code = document.getElementById('mCode').value.trim();
+      const item_name = document.getElementById('mName').value.trim();
+      const color = document.getElementById('mColor').value.trim();
+      const demand_qty = Number(document.getElementById('mQty').value);
+
+      if (!job_order || !item_code || !item_name || !demand_qty) {
+        return showToast('Fill all required (*) fields!', true);
+      }
+
+      const { error } = await supabaseClient.from('job_orders').insert([{ job_order, item_code, item_name, color, demand_qty }]);
+      if (error) return showToast(error.message, true);
+
+      ['mJob','mCode','mName','mColor','mQty'].forEach(id => document.getElementById(id).value = '');
+      showToast('Order item added!');
+      await loadAllData();
+    }
+
+    function uploadExcel() {
+      const fileInput = document.getElementById('excelFile');
+      if (!fileInput.files.length) return showToast('Select an Excel file first!', true);
+
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        const data = new Uint8Array(e.target.result);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json(sheet);
+
+        const toInsert = [];
+        rows.forEach(r => {
+          const job = r['JOB ORDER *'] || r['JOB ORDER'] || r['Job Order'];
+          const code = r['ITEM CODE *'] || r['ITEM CODE'] || r['Item Code'];
+          const name = r['ITEM NAME *'] || r['ITEM NAME'] || r['Item Name'];
+          const color = r['COLOR'] || r['Color'] || '';
+          const qty = Number(r['DEMAND QTY *'] || r['DEMAND QTY'] || r['Demand Qty']);
+
+          if (job && code && name && qty > 0) {
+            toInsert.push({
+              job_order: String(job).trim(),
+              item_code: String(code).trim(),
+              item_name: String(name).trim(),
+              color: String(color).trim(),
+              demand_qty: qty
+            });
+          }
+        });
+
+        if (!toInsert.length) return showToast('Could not find matching columns in Excel!', true);
+
+        const { error } = await supabaseClient.from('job_orders').insert(toInsert);
+        if (error) return showToast(error.message, true);
+
+        fileInput.value = '';
+        showToast(`Uploaded ${toInsert.length} order items from Excel!`);
+        await loadAllData();
+      };
+      reader.readAsArrayBuffer(fileInput.files[0]);
+    }
+
+    function subscribeRealtime() {
+      supabaseClient.channel('floor-live')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'job_orders' }, () => loadAllData())
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'delivery_logs' }, () => loadAllData())
+        .subscribe();
+    }
+  </script>
 </body>
 </html>
