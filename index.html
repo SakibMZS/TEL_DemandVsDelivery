@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>TEL Demand vs Delivery Tracker</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://unpkg.com/@supabase/supabase-js@2.49.1/dist/umd/supabase.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
 <body class="bg-slate-100 min-h-screen font-sans text-slate-800">
@@ -24,7 +24,7 @@
   <div class="max-w-6xl mx-auto p-4">
 
     <!-- Toast Notification Banner -->
-    <div id="toast" class="hidden fixed top-16 right-4 z-50 bg-emerald-600 text-white px-5 py-3 rounded-lg shadow-xl font-semibold transition-all"></div>
+    <div id="toast" class="hidden fixed top-16 right-4 z-50 bg-emerald-600 text-white px-5 py-3 rounded-lg shadow-xl font-semibold transition-all max-w-md"></div>
 
     <!-- 1. LOGIN SCREEN -->
     <div id="loginSection" class="max-w-md mx-auto bg-white p-6 rounded-xl shadow-md mt-10">
@@ -167,13 +167,13 @@
     function showToast(msg, isError = false) {
       const t = document.getElementById('toast');
       t.innerText = msg;
-      t.className = `fixed top-16 right-4 z-50 px-5 py-3 rounded-lg shadow-xl font-semibold text-white ${isError ? 'bg-red-600' : 'bg-emerald-600'}`;
+      t.className = `fixed top-16 right-4 z-50 px-5 py-3 rounded-lg shadow-xl font-semibold text-white max-w-md ${isError ? 'bg-red-600' : 'bg-emerald-600'}`;
       t.classList.remove('hidden');
-      setTimeout(() => t.classList.add('hidden'), 4000);
+      setTimeout(() => t.classList.add('hidden'), 5000);
     }
 
     async function login() {
-      const uid = document.getElementById('loginId').value.trim();
+      const uid = document.getElementById('loginId').value.trim().toLowerCase();
       const pin = document.getElementById('loginPin').value.trim();
       if (!uid || !pin) return showToast('Enter both User ID and PIN', true);
 
@@ -182,9 +182,16 @@
         .select('*')
         .eq('user_id', uid)
         .eq('pin', pin)
-        .single();
+        .maybeSingle();
 
-      if (error || !data) return showToast('Invalid User ID or PIN! (Did you run the SQL setup in Supabase?)', true);
+      if (error) {
+        console.error('Supabase Login Error:', error);
+        return showToast(`Database Error: ${error.message} (${error.code || 'API'})`, true);
+      }
+
+      if (!data) {
+        return showToast('Invalid User ID or PIN! Check spelling.', true);
+      }
 
       currentUser = data;
       document.getElementById('loginSection').classList.add('hidden');
